@@ -48,4 +48,4 @@ myproject/
 
 ## License
 
-MIT 
+MIT # Test authentication
