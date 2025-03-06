@@ -320,75 +320,123 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 - `/secure-credentials` - Repository for securely storing and managing API keys and service credentials
 
-## Secure Credentials Repository
-
-The project includes a comprehensive system for securely managing sensitive credentials:
-
-### Features
-
-- **Encrypted Storage**: All credentials are stored with AES encryption
-- **Command-Line Interface**: Easy-to-use PowerShell scripts for credential management
-- **Import/Export Tools**: Import credentials from environment variables or config files
-- **Backup System**: Automatic backups of credential data
-
-### Getting Started
-
-1. Navigate to the `/secure-credentials` directory:
-   ```powershell
-   cd secure-credentials
-   ```
-
-2. Add a new credential:
-   ```powershell
-   ./credential-manager.ps1 -Action Add -ServiceName "MyAPI" -Username "apiuser" -Password "apisecret" -Description "API credentials for service X"
-   ```
-
-3. Retrieve a credential:
-   ```powershell
-   ./credential-manager.ps1 -Action Get -ServiceName "MyAPI"
-   ```
-
-4. List all stored credentials:
-   ```powershell
-   ./credential-manager.ps1 -Action List
-   ```
-
-5. Import credentials from a configuration file:
-   ```powershell
-   ./import-credentials.ps1 -ConfigFile "my-credentials.json"
-   ```
-
-See the [Secure Credentials README](./secure-credentials/README.md) for more details.
-
-## Security Notes
-
-- The credentials repository is configured to be excluded from Git by default
-- Never commit the encryption key or credentials file to version control
-- Regular rotation of credentials is recommended
-
 ## MyProject Credential Management System
 
 This project demonstrates a secure approach to managing sensitive credentials in both JavaScript and Python applications.
 
-## Secure Credential Management
+### Security Architecture
 
-This project uses a secure approach to credential management:
+1. **Isolated Storage**: All credentials are stored outside the codebase in a secure location
+2. **Environment Variables**: Application loads credentials from environment variables
+3. **Encryption**: Sensitive data is encrypted at rest
 
-1. **Isolated Storage**: All credentials are stored in `C:\Documents\credentials\myproject\` outside the codebase
-2. **Individual Files**: Each credential is stored in its own file for better isolation and management
-3. **Backward Compatibility**: Support for legacy `.env` files is maintained
+### Configuration
 
-## Available Credentials
+The system supports the following configuration types:
+- API Keys
+- Database credentials
+- Authentication tokens
+- Encryption keys
 
-The system manages the following credentials:
+### Setup Guide
 
-- `API_KEY`: Used for API authentication
-- `DB_PASSWORD`: Used for database connections
-- `SECRET_TOKEN`: Used for cryptographic operations
+1. Create a secure credentials directory:
+   ```
+   mkdir -p [YOUR_SECURE_PATH]
+   ```
 
-## Setting Up Development Environment
+2. Set up your environment files in the secure directory (not in the code repository)
 
-To set up your development environment:
+3. Configure the application to load credentials from the secure location
+
+### Credential Validation
+
+To verify that credentials are loading correctly:
+
+1. For JavaScript applications:
+   ```
+   node test_credentials.js
+   ```
+
+2. For Python applications:
+   ```
+   python test_credentials.py
+   ```
+
+## Security Best Practices
+
+Following GitHub's [official recommendations](https://docs.github.com/en/rest/authentication/keeping-your-api-credentials-secure) for API credential security:
+
+### Use the GitHub API Securely
+
+- Create a personal access token with the minimum required scopes
+- Use fine-grained tokens for greater security
+
+### Store Authentication Credentials Securely
+
+- Never hardcode authentication credentials in your code
+- Never push unencrypted credentials to any repository, even private ones
+- Use secret scanning to detect credentials accidentally committed to repositories
+
+### Limit Access to Credentials
+
+- Use personal access tokens for personal access
+- Use built-in tokens for GitHub Actions workflows
+- Remove unused tokens regularly
+
+### Use Credentials Securely in Code
+
+- Never share personal access tokens with others
+- Never include credentials in logs or debugging output
+- Store tokens in environment variables or dedicated credential files outside source code
+- Our application automatically masks sensitive information when logging
+
+### Respond to Credential Exposures
+
+If credentials are accidentally exposed:
+1. Revoke and replace the exposed credentials immediately
+2. Review access logs for unauthorized access
+3. Document the incident and take steps to prevent recurrence
+
+## Rotating Credentials
+
+When rotating credentials:
+
+1. Update the corresponding configuration in your secure location
+2. Restart any running applications to load the new credentials
+
+## Additional Guidance
+
+- Never commit credentials to source control
+- Use strong, unique credentials for each environment
+- Rotate credentials regularly
+- Use different credentials for development, staging, and production
+
+## Project Structure
+
+```
+MyProject/
+├── src/
+│   ├── config/ # Configuration loaders
+│   ├── utils/ # Utility functions
+│   └── services/ # Business logic
+├── tests/
+│   ├── test_credentials.js # JavaScript credential testing
+│   └── test_credentials.py # Python credential testing
+└── README.md
+```
+
+## System Design
+
+The credential system is designed with multiple layers of protection:
+
+1. **Isolation**: Credentials stored outside code repository
+2. **Validation**: Input validation for all credential values
+3. **Access Logging**: Records which components accessed credentials
+4. **Encryption**: Sensitive data encrypted at rest
+5. **Rotation**: Support for regular credential rotation
+
+## Environment Variables
 
 1. Create the credentials directory:
    ```
