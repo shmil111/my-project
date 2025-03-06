@@ -1,0 +1,263 @@
+/* Base styles */
+:root {
+    --primary-color: #4a90e2;
+    --secondary-color: #2c3e50;
+    --success-color: #2ecc71;
+    --error-color: #e74c3c;
+    --text-color: #333;
+    --light-gray: #f5f6fa;
+    --border-color: #dcdde1;
+}
+
+/* Layout */
+.eve-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 1rem;
+}
+
+/* Header */
+.eve-header {
+    background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+    color: white;
+    padding: 4rem 0;
+    text-align: center;
+}
+
+.eve-title {
+    font-size: 2.5rem;
+    margin-bottom: 1rem;
+}
+
+.eve-subtitle {
+    font-size: 1.2rem;
+    opacity: 0.9;
+}
+
+/* Navigation */
+.eve-nav {
+    display: flex;
+    justify-content: center;
+    gap: 2rem;
+    padding: 1rem 0;
+    background: white;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.eve-nav-item {
+    color: var(--text-color);
+    text-decoration: none;
+    padding: 0.5rem 1rem;
+    border-radius: 4px;
+    transition: all 0.3s ease;
+}
+
+.eve-nav-item:hover,
+.eve-nav-item.active {
+    background: var(--primary-color);
+    color: white;
+}
+
+/* Cards */
+.eve-card {
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+}
+
+.eve-card-header {
+    margin-bottom: 1rem;
+}
+
+.eve-card-body {
+    color: var(--text-color);
+}
+
+/* Buttons */
+.eve-btn {
+    display: inline-block;
+    padding: 0.5rem 1rem;
+    border-radius: 4px;
+    text-decoration: none;
+    transition: all 0.3s ease;
+    cursor: pointer;
+    border: none;
+}
+
+.eve-btn-primary {
+    background: var(--primary-color);
+    color: white;
+}
+
+.eve-btn-secondary {
+    background: var(--secondary-color);
+    color: white;
+}
+
+.eve-btn-outline {
+    border: 2px solid var(--primary-color);
+    color: var(--primary-color);
+}
+
+.eve-btn-link {
+    color: var(--primary-color);
+    text-decoration: none;
+}
+
+/* Forms */
+.eve-form-group {
+    margin-bottom: 1rem;
+}
+
+.eve-label {
+    display: block;
+    margin-bottom: 0.5rem;
+    color: var(--text-color);
+}
+
+.eve-input,
+.eve-textarea {
+    width: 100%;
+    padding: 0.5rem;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    font-size: 1rem;
+}
+
+.eve-textarea {
+    min-height: 100px;
+    resize: vertical;
+}
+
+/* Messages */
+.eve-message-container {
+    height: 300px;
+    overflow-y: auto;
+    padding: 1rem;
+    background: var(--light-gray);
+    border-radius: 4px;
+    margin-bottom: 1rem;
+}
+
+.eve-message {
+    margin-bottom: 1rem;
+    max-width: 80%;
+}
+
+.eve-message-user {
+    margin-left: auto;
+}
+
+.eve-message-eve {
+    margin-right: auto;
+}
+
+.eve-message-content {
+    padding: 0.5rem 1rem;
+    border-radius: 4px;
+    background: white;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+}
+
+.eve-message-user .eve-message-content {
+    background: var(--primary-color);
+    color: white;
+}
+
+.eve-message-time {
+    font-size: 0.8rem;
+    color: #666;
+    margin-top: 0.25rem;
+}
+
+/* Status indicators */
+.eve-status {
+    display: inline-block;
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.9rem;
+}
+
+.eve-status-online {
+    background: var(--success-color);
+    color: white;
+}
+
+.eve-status-offline {
+    background: var(--error-color);
+    color: white;
+}
+
+.eve-status-loading {
+    background: #f1c40f;
+    color: white;
+}
+
+/* Animations */
+.eve-animate-fade-in {
+    animation: fadeIn 0.5s ease-in;
+}
+
+.eve-animate-slide-up {
+    animation: slideUp 0.5s ease-out;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+@keyframes slideUp {
+    from { transform: translateY(20px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+}
+
+/* Scroll top button */
+.eve-scroll-top {
+    position: fixed;
+    bottom: 2rem;
+    right: 2rem;
+    background: var(--primary-color);
+    color: white;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-decoration: none;
+    opacity: 0;
+    transition: all 0.3s ease;
+    cursor: pointer;
+}
+
+.eve-scroll-top.visible {
+    opacity: 1;
+}
+
+/* Footer */
+.eve-footer {
+    background: var(--secondary-color);
+    color: white;
+    padding: 2rem 0;
+    margin-top: 4rem;
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+    .eve-nav {
+        flex-direction: column;
+        align-items: center;
+        gap: 1rem;
+    }
+
+    .eve-title {
+        font-size: 2rem;
+    }
+
+    .eve-message {
+        max-width: 90%;
+    }
+} 
