@@ -13,11 +13,39 @@ import { Request, Response } from 'express';
  * @returns A mock Request object
  */
 export function createMockRequest(options: Partial<Request> = {}): Partial<Request> {
-  return {
+  const defaultRequest: Partial<Request> = {
     body: {},
     params: {},
     query: {},
     headers: {},
+    cookies: {},
+    user: null,
+    is: (type: string) => false,
+    get: (name: string) => name === 'content-type' ? [] : undefined,
+    accepts: (types: string[]) => false,
+    acceptsCharsets: (charsets: string[]) => false,
+    acceptsEncodings: (encodings: string[]) => false,
+    acceptsLanguages: (languages: string[]) => false,
+    param: (name: string) => undefined,
+    protocol: 'http',
+    secure: false,
+    ip: '127.0.0.1',
+    ips: [],
+    subdomains: [],
+    path: '/',
+    hostname: 'localhost',
+    host: 'localhost',
+    fresh: false,
+    stale: true,
+    xhr: false,
+    signedCookies: {},
+    originalUrl: '/',
+    url: '/',
+    method: 'GET'
+  };
+
+  return {
+    ...defaultRequest,
     ...options
   };
 }

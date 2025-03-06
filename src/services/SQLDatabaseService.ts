@@ -40,10 +40,10 @@ export interface SQLDatabaseConfig {
 /**
  * SQL Database Service implementation
  */
-export class SQLDatabaseService<T extends { id?: number | string }> extends DatabaseService<T> {
+export class SQLDatabaseService<T extends DatabaseRecord> extends DatabaseService<T> {
   private knexInstance: Knex.Knex | null = null;
   private config: SQLDatabaseConfig;
-  private transaction: Knex.Knex.Transaction | null = null; // Transaction object
+  private currentTransaction: Knex.Knex.Transaction | null = null; // Renamed from transaction
   private queryCache: Map<string, { data: any; timestamp: number }> = new Map();
   private cacheTimeout: number = 5 * 60 * 1000; // 5 minutes default
   private performanceMetrics: Map<string, { count: number; totalTime: number }> = new Map();
@@ -143,7 +143,7 @@ export class SQLDatabaseService<T extends { id?: number | string }> extends Data
       
       if (!constraintExists) {
         try {
-          await this.knexInstance.schema.alterTable(this.collectionName, (table) => {
+          await this.knexInstance.schema.alterTable(this.collectionName, (table: Knex.Knex.TableBuilder) => {
             table.unique(keyGroup, constraintName);
             logger.info(`Added unique constraint ${constraintName} to table ${this.collectionName}`);
           });
@@ -176,10 +176,10 @@ export class SQLDatabaseService<T extends { id?: number | string }> extends Data
     if (!this.knexInstance) {
       throw new Error('Database not initialized');
     }
-    if (this.transaction) {
+    if (this.currentTransaction) {
       throw new Error('Transaction already in progress');
     }
-    this.transaction = await this.knexInstance.transaction();
+    this.currentTransaction = await this.knexInstance.transaction();
     logger.debug('Transaction started');
   }
   
@@ -188,11 +188,11 @@ export class SQLDatabaseService<T extends { id?: number | string }> extends Data
    * @throws {Error} If there is no transaction to commit.
    */
   public async commitTransaction(): Promise<void> {
-    if (!this.transaction) {
+    if (!this.currentTransaction) {
       throw new Error('No transaction to commit');
     }
-    await this.transaction.commit();
-    this.transaction = null;
+    await this.currentTransaction.commit();
+    this.currentTransaction = null;
     logger.debug('Transaction committed');
   }
   
@@ -201,11 +201,11 @@ export class SQLDatabaseService<T extends { id?: number | string }> extends Data
    * @throws {Error} If there is no transaction to rollback.
    */
   public async rollbackTransaction(): Promise<void> {
-    if (!this.transaction) {
+    if (!this.currentTransaction) {
       throw new Error('No transaction to rollback');
     }
-    await this.transaction.rollback();
-    this.transaction = null;
+    await this.currentTransaction.rollback();
+    this.currentTransaction = null;
     logger.debug('Transaction rolled back');
   }
   
@@ -247,91 +247,37 @@ export class SQLDatabaseService<T extends { id?: number | string }> extends Data
   }
   
   /**
-   * Get multiple records by their IDs.
-   * @param ids An array of IDs.
-   * @returns An array of records.
-   * @throws {Error} If database is not initialized.
-   */
-  public async getByIds(ids: (number | string)[]): Promise<T[]> {
-    if (ids.length === 0) {
-      return [];
-    }
-
-    try {
-      const query = this.buildQuery()
-        .whereIn('id', ids);
-      
-      const records = await query.select('*');
-      logger.debug(`Retrieved ${records.length} records by IDs from ${this.collectionName}`);
-      return records as T[];
-    } catch (error) {
-      throw new Error(this.handleDatabaseError(error, 'getByIds'));
-    }
-  }
-  
-  /**
    * Creates a new record in the collection.
-   * @param data The data for the new record.
-   * @returns A promise that resolves to the newly created record, including its ID.
-   * @throws {Error} If the database is not initialized or a unique constraint is violated.
+   * @param data The data to insert.
+   * @returns A promise that resolves to the created record.
    */
-  public async create(data: Omit<T, 'id'>): Promise<T & { id: number | string }> {
+  public async create(data: Partial<T>): Promise<T> {
+    if (!this.knexInstance) {
+      throw new Error('Database not initialized');
+    }
+    
     try {
+      // Validate the record data
       this.validateRecord(data);
       
-      // Check for unique constraint violation *before* insert
-      if (this.config.uniqueKeys && this.config.uniqueKeys.length > 0) {
-        for (const keyGroup of this.config.uniqueKeys) {
-          const whereClause: Record<string, any> = {};
-          let hasAllKeys = true;
-          for (const key of keyGroup) {
-            if (data[key] !== undefined && data[key] !== null) {
-              whereClause[key] = data[key];
-            } else {
-              hasAllKeys = false;
-              break;
-            }
-          }
-          
-          if (hasAllKeys) {
-            const existingRecord = await this.buildQuery()
-              .where(whereClause)
-              .first();
-            
-            if (existingRecord) {
-              throw new Error(`A record with the same unique key '${keyGroup.join(', ')}' already exists.`);
-            }
-          }
-        }
-      }
-      
-      // Check and update schema if needed
+      // Ensure all columns exist
       await this.ensureColumnsExist(data);
       
-      const query = this.buildQuery();
-      const [newId] = await query
-        .insert(data)
-        .returning('id');
+      // Insert the record
+      const [id] = await this.knexInstance(this.collectionName).insert(data);
       
-      let idToReturn: number | string;
-      if (typeof newId === 'object' && newId !== null) {
-        if ('id' in newId) {
-          idToReturn = newId.id;
-        } else {
-          throw new Error("Could not retrieve ID");
-        }
-      } else {
-        idToReturn = newId;
-      }
-      
-      const createdRecord = await this.getById(idToReturn);
+      // Return the created record
+      const createdRecord = await this.getById(id);
       if (!createdRecord) {
-        throw new Error("Could not retrieve newly created record");
+        throw new Error('Failed to retrieve created record');
       }
       
-      logger.debug(`Created record with ID ${createdRecord.id} in ${this.collectionName}`);
-      return createdRecord as T & { id: number | string };
+      logger.debug(`Created record with ID ${id} in ${this.collectionName}`);
+      return createdRecord;
     } catch (error) {
+      if (this.handleUniqueConstraintViolation(error)) {
+        throw new Error('Unique constraint violation');
+      }
       throw new Error(this.handleDatabaseError(error, 'create'));
     }
   }
@@ -341,114 +287,86 @@ export class SQLDatabaseService<T extends { id?: number | string }> extends Data
    * @param id The ID of the record to update.
    * @param data The data to update.
    * @returns A promise that resolves to the updated record.
-   * @throws {Error} If the database is not initialized, or the record with the given ID does not exist.
+   * @throws {Error} If the database is not initialized.
    */
-  public async update(id: number | string, data: Partial<T>): Promise<T & {id: number | string}> {
+  public async update(id: number | string, data: Partial<T>): Promise<T & { id: number | string }> {
+    if (!this.knexInstance) {
+      throw new Error('Database not initialized');
+    }
+    
     try {
+      // Validate the record data
       this.validateRecord(data);
       
-      // Check if the record exists before attempting to update
-      const exists = await this.exists(id);
-      if (!exists) {
-        throw new Error(`Record with ID ${id} not found`);
-      }
-      
-      // Check and update schema if needed
+      // Ensure all columns exist
       await this.ensureColumnsExist(data);
       
-      // Remove id from data to prevent trying to update the primary key
-      const updateData = { ...data };
-      delete updateData.id;
-      
-      const query = this.buildQuery()
+      // Update the record
+      const updated = await this.knexInstance(this.collectionName)
         .where({ id })
-        .update(updateData);
+        .update(data);
       
-      const updated = await query;
+      if (!updated) {
+        throw new Error('Record not found');
+      }
       
-      if (updated === 0) {
-        throw new Error(`Failed to update record with ID ${id}`);
+      // Return the updated record
+      const updatedRecord = await this.getById(id);
+      if (!updatedRecord) {
+        throw new Error('Failed to retrieve updated record');
       }
       
       logger.debug(`Updated record with ID ${id} in ${this.collectionName}`);
-      const updatedRecord = await this.getById(id);
-      if (!updatedRecord) {
-        throw new Error('Could not retrieve updated record');
-      }
-      return updatedRecord as T & {id: number | string};
+      return updatedRecord as T & { id: number | string };
     } catch (error) {
+      if (this.handleUniqueConstraintViolation(error)) {
+        throw new Error('Unique constraint violation');
+      }
       throw new Error(this.handleDatabaseError(error, 'update'));
     }
   }
   
   /**
-   * Deletes a record from the collection by its ID.
+   * Deletes a record from the collection.
    * @param id The ID of the record to delete.
    * @returns A promise that resolves to true if the record was deleted, false otherwise.
    * @throws {Error} If the database is not initialized.
    */
   public async delete(id: number | string): Promise<boolean> {
+    if (!this.knexInstance) {
+      throw new Error('Database not initialized');
+    }
+    
     try {
-      const query = this.buildQuery()
+      const deleted = await this.knexInstance(this.collectionName)
         .where({ id })
         .delete();
       
-      const deleted = await query;
-      const success = deleted > 0;
-      
-      if (success) {
-        logger.debug(`Deleted record with ID ${id} from ${this.collectionName}`);
-      } else {
-        logger.warn(`Record with ID ${id} not found in ${this.collectionName} for deletion`);
-      }
-      
-      return success;
+      logger.debug(`Deleted record with ID ${id} from ${this.collectionName}`);
+      return deleted > 0;
     } catch (error) {
       throw new Error(this.handleDatabaseError(error, 'delete'));
     }
   }
   
   /**
-   * Checks if a record with the given ID exists in the collection.
-   * @param id The ID of the record to check.
-   * @returns A promise that resolves to true if the record exists, false otherwise.
-   * @throws {Error} If the database is not initialized.
+   * Executes multiple operations in a transaction.
+   * @param operations Array of functions that take a transaction object and return a promise.
+   * @returns A promise that resolves to an array of results from the operations.
    */
-  public async exists(id: number | string): Promise<boolean> {
-    try {
-      const query = this.buildQuery()
-        .select(this.knexInstance!.raw('1'))
-        .where({ id })
-        .first();
-      
-      const result = await query;
-      logger.debug(`Checked existence of record with ID ${id} in ${this.collectionName}: ${!!result}`);
-      return !!result;
-    } catch (error) {
-      throw new Error(this.handleDatabaseError(error, 'exists'));
+  public async executeTransaction<R>(operations: ((trx: Knex.Knex.Transaction) => Promise<R>)[]): Promise<R[]> {
+    if (!this.knexInstance) {
+      throw new Error('Database not initialized');
     }
-  }
-  
-  /**
-   * Counts the number of records in the collection.
-   * @param filter An optional filter to apply to the count.
-   * @returns A promise that resolves to the number of records.
-   * @throws {Error} If the database is not initialized.
-   */
-  public async count(filter?: Record<string, any>): Promise<number> {
+    
+    const trx = await this.knexInstance.transaction();
     try {
-      const query = this.buildQuery();
-      
-      if (filter) {
-        query.where(filter);
-      }
-      
-      const result = await query.count('id as count').first();
-      const count = (result?.count as number) || 0;
-      logger.debug(`Counted ${count} records in ${this.collectionName}`);
-      return count;
+      const results = await Promise.all(operations.map(op => op(trx)));
+      await trx.commit();
+      return results;
     } catch (error) {
-      throw new Error(this.handleDatabaseError(error, 'count'));
+      await trx.rollback();
+      throw error;
     }
   }
   
@@ -545,8 +463,8 @@ export class SQLDatabaseService<T extends { id?: number | string }> extends Data
     
     let query = this.knexInstance.raw(sql, params);
     
-    if(this.transaction) {
-      query = query.transacting(this.transaction);
+    if(this.currentTransaction) {
+      query = query.transacting(this.currentTransaction);
     }
     logger.debug(`Executing raw SQL query: ${sql} with params: ${JSON.stringify(params)}`);
     return query;
@@ -744,8 +662,8 @@ export class SQLDatabaseService<T extends { id?: number | string }> extends Data
 
     let query = this.knexInstance(this.collectionName);
 
-    if (this.transaction) {
-      query = query.transacting(this.transaction);
+    if (this.currentTransaction) {
+      query = query.transacting(this.currentTransaction);
     }
 
     // Apply filtering
@@ -1102,15 +1020,15 @@ export class SQLDatabaseService<T extends { id?: number | string }> extends Data
 
       // Apply pagination
       if (options.offset !== undefined) {
-        query = query.offset(options.offset);
+        query.offset(options.offset);
       }
       if (options.limit !== undefined) {
-        query = query.limit(options.limit);
+        query.limit(options.limit);
       }
 
       // Apply transaction if exists
-      if (this.transaction) {
-        query = query.transacting(this.transaction);
+      if (this.currentTransaction) {
+        query = query.transacting(this.currentTransaction);
       }
 
       const results = await query;
@@ -1139,32 +1057,6 @@ export class SQLDatabaseService<T extends { id?: number | string }> extends Data
     } catch (error) {
       await trx.rollback();
       throw new Error(this.handleDatabaseError(error, 'migrate'));
-    }
-  }
-
-  /**
-   * Executes multiple operations in a transaction with automatic rollback on error.
-   * @param operations Array of async functions to execute in the transaction.
-   * @returns Promise that resolves to an array of operation results.
-   */
-  public async transaction<T>(operations: ((trx: Knex.Knex.Transaction) => Promise<T>)[]): Promise<T[]> {
-    if (!this.knexInstance) {
-      throw new Error('Database not initialized');
-    }
-
-    const trx = await this.knexInstance.transaction();
-    try {
-      const results: T[] = [];
-      for (const operation of operations) {
-        const result = await operation(trx);
-        results.push(result);
-      }
-      await trx.commit();
-      logger.debug(`Transaction completed successfully with ${operations.length} operations`);
-      return results;
-    } catch (error) {
-      await trx.rollback();
-      throw new Error(this.handleDatabaseError(error, 'transaction'));
     }
   }
 
@@ -1704,5 +1596,52 @@ export class SQLDatabaseService<T extends { id?: number | string }> extends Data
       details: lastCheck.details,
       lastCheck: lastCheck.lastCheck
     };
+  }
+
+  /**
+   * Check if a record exists
+   * @param id The ID of the record to check
+   * @returns A promise that resolves to a boolean indicating if the record exists
+   */
+  public async exists(id: number | string): Promise<boolean> {
+    if (!this.knexInstance) {
+      throw new Error('Database not initialized');
+    }
+    
+    try {
+      const result = await this.knexInstance(this.collectionName)
+        .where('id', id)
+        .first();
+      
+      return !!result;
+    } catch (error) {
+      throw new Error(this.handleDatabaseError(error, 'exists'));
+    }
+  }
+  
+  /**
+   * Count records that match a filter
+   * @param filter Optional filter to count specific records
+   * @returns A promise that resolves to the count of records
+   */
+  public async count(filter?: Record<string, any>): Promise<number> {
+    if (!this.knexInstance) {
+      throw new Error('Database not initialized');
+    }
+    
+    try {
+      let query = this.knexInstance(this.collectionName);
+      
+      if (filter) {
+        Object.entries(filter).forEach(([key, value]) => {
+          query = query.where(key, value);
+        });
+      }
+      
+      const result = await query.count('id as count').first();
+      return result ? Number(result.count) : 0;
+    } catch (error) {
+      throw new Error(this.handleDatabaseError(error, 'count'));
+    }
   }
 } 

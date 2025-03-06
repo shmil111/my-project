@@ -16,6 +16,10 @@ interface TestItem {
   value: number;
   tags?: string[];
   metadata?: Record<string, any>;
+  extraField?: string;
+  nested?: {
+    count: number;
+  };
 }
 
 describe('SQLDatabaseService', () => {

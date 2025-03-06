@@ -60,7 +60,7 @@ describe('GistManager Component', () => {
     window.showNotification = jest.fn();
     
     // Import GistManager class dynamically
-    const gistManagerModule = await import('../../public/js/components/gistManager.js');
+    const gistManagerModule = await import('@public/js/components/gistManager.js');
     GistManager = gistManagerModule.GistManager;
     
     // Create a container for testing
