@@ -1,0 +1,1423 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Threat Intelligence Dashboard</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/moment@2.29.4/moment.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/d3@7.8.5/dist/d3.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css">
+    <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+    <script src="https://cdn.jsdelivr.net/npm/heatmap.js@2.0.5/build/heatmap.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/leaflet-heatmap@1.0.0/leaflet-heatmap.js"></script>
+    <style>
+        :root {
+            --primary-color: #2a52be;
+            --secondary-color: #28a745;
+            --danger-color: #dc3545;
+            --warning-color: #ffc107;
+            --info-color: #17a2b8;
+            --dark-bg: #343a40;
+            --light-bg: #f8f9fa;
+            --critical-color: #9c1e1e;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f5f5f5;
+            color: #333;
+        }
+        
+        .dashboard-container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        .card {
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+            border: none;
+            transition: all 0.3s ease;
+        }
+        
+        .card:hover {
+            box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
+            transform: translateY(-3px);
+        }
+        
+        .card-header {
+            border-radius: 10px 10px 0 0 !important;
+            font-weight: 600;
+        }
+        
+        .indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 5px;
+        }
+        
+        .critical { background-color: var(--danger-color); }
+        .high { background-color: #ff6b1a; }
+        .medium { background-color: var(--warning-color); }
+        .low { background-color: var(--secondary-color); }
+        
+        .intelligence-item {
+            border-left: 3px solid #ddd;
+            padding-left: 15px;
+            margin-bottom: 15px;
+            transition: all 0.2s ease;
+        }
+        
+        .intelligence-item:hover {
+            background-color: rgba(0,0,0,0.02);
+        }
+        
+        .intelligence-item.priority-critical {
+            border-left-color: var(--danger-color);
+        }
+        
+        .intelligence-item.priority-high {
+            border-left-color: #ff6b1a;
+        }
+        
+        .intelligence-item.priority-medium {
+            border-left-color: var(--warning-color);
+        }
+        
+        .intelligence-item.priority-low {
+            border-left-color: var(--secondary-color);
+        }
+        
+        .refresh-button {
+            cursor: pointer;
+            transition: transform 0.3s ease;
+        }
+        
+        .refresh-button:hover {
+            transform: rotate(180deg);
+        }
+        
+        .refresh-spinner {
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .alert-badge {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            padding: 0.25rem 0.5rem;
+            border-radius: 50%;
+            font-size: 0.8rem;
+            font-weight: bold;
+        }
+        
+        .auto-refresh-status {
+            font-size: 0.8rem;
+            margin-left: 10px;
+            color: #6c757d;
+        }
+        
+        .new-item {
+            animation: fadeIn 2s;
+            position: relative;
+        }
+        
+        .new-item::after {
+            content: 'NEW';
+            position: absolute;
+            top: 0;
+            right: 0;
+            background-color: var(--danger-color);
+            color: white;
+            padding: 2px 5px;
+            font-size: 0.7rem;
+            border-radius: 3px;
+        }
+        
+        @keyframes fadeIn {
+            from { background-color: rgba(255, 255, 0, 0.2); }
+            to { background-color: transparent; }
+        }
+        
+        #last-refresh {
+            font-size: 0.85rem;
+            color: #6c757d;
+        }
+        
+        .settings-panel {
+            position: fixed;
+            right: -300px;
+            top: 0;
+            width: 300px;
+            height: 100%;
+            background-color: #fff;
+            box-shadow: -2px 0 5px rgba(0,0,0,0.1);
+            z-index: 1000;
+            transition: right 0.3s ease;
+            padding: 20px;
+            overflow-y: auto;
+        }
+        
+        .settings-panel.open {
+            right: 0;
+        }
+        
+        .settings-btn {
+            position: fixed;
+            right: 20px;
+            bottom: 20px;
+            z-index: 1001;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            background-color: var(--primary-color);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        }
+        
+        .tag {
+            display: inline-block;
+            background-color: #e9ecef;
+            color: #495057;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 0.8rem;
+            margin-right: 5px;
+            margin-bottom: 5px;
+        }
+        
+        .navbar-brand {
+            font-weight: 700;
+            color: var(--primary-color) !important;
+        }
+        
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        
+        .data-table th, .data-table td {
+            padding: 8px 12px;
+            text-align: left;
+            border-bottom: 1px solid #eee;
+        }
+        
+        .data-table th {
+            background-color: #f8f9fa;
+            font-weight: 600;
+        }
+        
+        .data-table tr:hover {
+            background-color: #f5f5f5;
+        }
+        
+        .dashboard-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        
+        .stat-card {
+            padding: 20px;
+            border-radius: 10px;
+            color: white;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            height: 100%;
+        }
+        
+        .stat-card i {
+            font-size: 2rem;
+            margin-bottom: 10px;
+        }
+        
+        .stat-card .count {
+            font-size: 2rem;
+            font-weight: bold;
+            line-height: 1;
+        }
+        
+        .stat-card .label {
+            margin-top: 5px;
+            opacity: 0.9;
+        }
+        
+        .bg-critical { background-color: var(--danger-color); }
+        .bg-high { background-color: #ff6b1a; }
+        .bg-medium { background-color: var(--warning-color); color: #343a40; }
+        .bg-low { background-color: var(--secondary-color); }
+        
+        .ioc-table {
+            font-size: 0.9rem;
+        }
+        
+        /* Responsive adjustments */
+        @media (max-width: 768px) {
+            .dashboard-header {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+            
+            .stat-card {
+                margin-bottom: 15px;
+            }
+        }
+        
+        /* New styles for enhanced dashboard */
+        .map-container {
+            height: 400px;
+            width: 100%;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+        
+        .pulse-animation {
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0% {
+                box-shadow: 0 0 0 0 rgba(220, 53, 69, 0.7);
+            }
+            70% {
+                box-shadow: 0 0 0 10px rgba(220, 53, 69, 0);
+            }
+            100% {
+                box-shadow: 0 0 0 0 rgba(220, 53, 69, 0);
+            }
+        }
+        
+        .threat-node {
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .threat-node:hover {
+            filter: brightness(1.2);
+        }
+        
+        .gauge-chart {
+            height: 180px;
+        }
+        
+        .connections-chart {
+            height: 300px;
+        }
+        
+        .real-time-alert {
+            background-color: rgba(220, 53, 69, 0.1);
+            border-left: 4px solid var(--danger-color);
+            animation: fadeIn 0.5s;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .badge-critical {
+            background-color: var(--critical-color);
+            color: white;
+        }
+        
+        .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 5px;
+        }
+        
+        .status-active {
+            background-color: var(--secondary-color);
+        }
+        
+        .status-inactive {
+            background-color: var(--dark-bg);
+        }
+        
+        .threat-map-legend {
+            background-color: white;
+            padding: 10px;
+            border-radius: 5px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .timeline-item {
+            position: relative;
+            padding-left: 30px;
+            margin-bottom: 15px;
+        }
+        
+        .timeline-item:before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background-color: var(--primary-color);
+            margin-top: 5px;
+        }
+        
+        .timeline-item:after {
+            content: '';
+            position: absolute;
+            left: 5px;
+            top: 17px;
+            width: 2px;
+            height: calc(100% + 5px);
+            background-color: #dee2e6;
+        }
+        
+        .timeline-item:last-child:after {
+            display: none;
+        }
+        
+        #attackVectorRadar {
+            margin: 0 auto;
+        }
+        
+        .mitre-tactic {
+            padding: 5px 10px;
+            margin: 2px;
+            border-radius: 4px;
+            display: inline-block;
+            font-size: 0.85rem;
+            background-color: rgba(42, 82, 190, 0.1);
+            border: 1px solid rgba(42, 82, 190, 0.2);
+        }
+        
+        .spinner-border-sm {
+            width: 1rem;
+            height: 1rem;
+            border-width: 0.2em;
+        }
+        
+        .dashboard-title {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        
+        .data-updated {
+            font-size: 0.8rem;
+            color: #6c757d;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-light bg-light mb-4">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="#">
+                <i class="bi bi-shield-lock"></i> MyProject Threat Intelligence
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav">
+                    <li class="nav-item">
+                        <a class="nav-link active" href="#">Dashboard</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#">Intelligence</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#">IOCs</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#">Reports</a>
+                    </li>
+                </ul>
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="#" id="refreshData">
+                            <i class="bi bi-arrow-clockwise"></i> Refresh
+                        </a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="dashboard-container">
+        <header class="mb-4">
+            <div class="dashboard-title">
+                <h1 class="mb-3">
+                    <i class="bi bi-shield-lock"></i> Threat Intelligence Dashboard
+                </h1>
+                <div>
+                    <span class="data-updated">Last updated: <span id="lastUpdated">Loading...</span></span>
+                    <button class="btn btn-outline-primary ms-2" id="refreshDashboard">
+                        <i class="bi bi-arrow-clockwise refresh-button"></i> Refresh
+                    </button>
+                </div>
+            </div>
+            <p class="lead">Real-time security threat monitoring and intelligence analysis</p>
+        </header>
+
+        <!-- Summary Statistics Row -->
+        <div class="row mb-4">
+            <div class="col-md-3">
+                <div class="card">
+                    <div class="card-body text-center">
+                        <h5 class="card-title">Critical Threats</h5>
+                        <div class="display-4 text-danger fw-bold" id="criticalThreats">0</div>
+                        <div class="small text-muted">Immediate action required</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card">
+                    <div class="card-body text-center">
+                        <h5 class="card-title">High Threats</h5>
+                        <div class="display-4 text-warning fw-bold" id="highThreats">0</div>
+                        <div class="small text-muted">Requires attention</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card">
+                    <div class="card-body text-center">
+                        <h5 class="card-title">Medium Threats</h5>
+                        <div class="display-4 text-primary fw-bold" id="mediumThreats">0</div>
+                        <div class="small text-muted">Monitor regularly</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card">
+                    <div class="card-body text-center">
+                        <h5 class="card-title">Low Threats</h5>
+                        <div class="display-4 text-success fw-bold" id="lowThreats">0</div>
+                        <div class="small text-muted">Informational</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Global Threat Map Row -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                        <span><i class="bi bi-globe"></i> Global Threat Distribution</span>
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="realTimeUpdates" checked>
+                            <label class="form-check-label text-white" for="realTimeUpdates">Real-time updates</label>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div id="threatMap" class="map-container"></div>
+                        <div class="row mt-3">
+                            <div class="col-md-6">
+                                <div class="threat-map-legend">
+                                    <h6>Threat Intensity</h6>
+                                    <div class="d-flex align-items-center">
+                                        <span style="background: linear-gradient(to right, green, yellow, orange, red); width: 200px; height: 20px; display: inline-block;"></span>
+                                        <span class="ms-2">Low</span>
+                                        <span class="mx-auto"></span>
+                                        <span class="me-2">High</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="d-flex justify-content-end">
+                                    <div class="btn-group btn-group-sm" role="group">
+                                        <button type="button" class="btn btn-outline-secondary active" data-view="heat">Heat Map</button>
+                                        <button type="button" class="btn btn-outline-secondary" data-view="markers">Markers</button>
+                                        <button type="button" class="btn btn-outline-secondary" data-view="both">Both</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Threat Matrix and Real-time Alerts Row -->
+        <div class="row mb-4">
+            <div class="col-md-7">
+                <div class="card">
+                    <div class="card-header bg-primary text-white">
+                        <i class="bi bi-grid-3x3"></i> MITRE ATT&CK® Matrix Coverage
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <select class="form-select" id="attackPhaseSelect">
+                                <option value="all">All Tactics</option>
+                                <option value="initial-access">Initial Access</option>
+                                <option value="execution">Execution</option>
+                                <option value="persistence">Persistence</option>
+                                <option value="privilege-escalation">Privilege Escalation</option>
+                                <option value="defense-evasion">Defense Evasion</option>
+                                <option value="credential-access">Credential Access</option>
+                                <option value="discovery">Discovery</option>
+                                <option value="lateral-movement">Lateral Movement</option>
+                                <option value="collection">Collection</option>
+                                <option value="exfiltration">Exfiltration</option>
+                                <option value="command-and-control">Command and Control</option>
+                                <option value="impact">Impact</option>
+                            </select>
+                        </div>
+                        <div id="attackMatrix" class="overflow-auto" style="height: 400px;"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-5">
+                <div class="card">
+                    <div class="card-header bg-danger text-white d-flex justify-content-between align-items-center">
+                        <span><i class="bi bi-bell"></i> Real-time Alerts</span>
+                        <span class="badge bg-light text-danger" id="alertCounter">0</span>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="list-group list-group-flush" id="alertsList" style="max-height: 450px; overflow-y: auto;">
+                            <div class="list-group-item text-center text-muted py-5">
+                                <i class="bi bi-hourglass" style="font-size: 2rem;"></i>
+                                <p class="mt-2">Waiting for alerts...</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Key Performance Indicators -->
+        <div class="row mb-4">
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-header bg-primary text-white">
+                        <i class="bi bi-speedometer2"></i> Security Posture
+                    </div>
+                    <div class="card-body">
+                        <div id="securityPostureGauge" class="gauge-chart"></div>
+                        <hr>
+                        <div class="d-flex justify-content-between">
+                            <div class="text-center">
+                                <h6>Detection Coverage</h6>
+                                <div class="h4" id="detectionCoverage">0%</div>
+                            </div>
+                            <div class="text-center">
+                                <h6>Response Readiness</h6>
+                                <div class="h4" id="responseReadiness">0%</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-header bg-primary text-white">
+                        <i class="bi bi-graph-up"></i> Threat Trends (30 Days)
+                    </div>
+                    <div class="card-body">
+                        <canvas id="threatTrendChart" height="200"></canvas>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-header bg-primary text-white">
+                        <i class="bi bi-radar"></i> Attack Vectors
+                    </div>
+                    <div class="card-body">
+                        <div id="attackVectorRadar"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Threat Correlation Network -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header bg-primary text-white">
+                        <i class="bi bi-diagram-3"></i> Threat Intelligence Correlation Network
+                    </div>
+                    <div class="card-body">
+                        <div id="correlationNetwork" class="connections-chart"></div>
+                        <div class="text-center mt-3">
+                            <small class="text-muted">
+                                <i class="bi bi-info-circle"></i> Click on nodes to explore connections between threat actors, campaigns, and indicators
+                            </small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- IOC & Threat Activity Timeline -->
+        <div class="row mb-4">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header bg-primary text-white">
+                        <i class="bi bi-list-check"></i> Top Indicators of Compromise
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>Type</th>
+                                        <th>Indicator</th>
+                                        <th>Confidence</th>
+                                        <th>First Seen</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="iocTableBody">
+                                    <!-- IOC data will be loaded here -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header bg-primary text-white">
+                        <i class="bi bi-clock-history"></i> Threat Activity Timeline
+                    </div>
+                    <div class="card-body">
+                        <div id="threatTimeline" style="max-height: 300px; overflow-y: auto;">
+                            <!-- Timeline will be loaded here -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Initialize the dashboard when the page loads
+        document.addEventListener('DOMContentLoaded', function() {
+            // Set up refresh button
+            document.getElementById('refreshDashboard').addEventListener('click', function() {
+                this.disabled = true;
+                const icon = this.querySelector('i');
+                icon.classList.remove('bi-arrow-clockwise');
+                icon.classList.add('bi-hourglass-split');
+                
+                // Simulate refresh delay
+                setTimeout(() => {
+                    fetchDashboardData();
+                    this.disabled = false;
+                    icon.classList.remove('bi-hourglass-split');
+                    icon.classList.add('bi-arrow-clockwise');
+                }, 1000);
+            });
+            
+            // Initialize components
+            initThreatMap();
+            initSecurityPostureGauge();
+            initAttackVectorRadar();
+            initCorrelationNetwork();
+            initMitreAttackMatrix();
+            initThreatTrendsChart();
+            
+            // Load initial data
+            fetchDashboardData();
+            
+            // Set up real-time updates
+            if (document.getElementById('realTimeUpdates').checked) {
+                startRealTimeUpdates();
+            }
+            
+            // Toggle real-time updates
+            document.getElementById('realTimeUpdates').addEventListener('change', function() {
+                if (this.checked) {
+                    startRealTimeUpdates();
+                } else {
+                    stopRealTimeUpdates();
+                }
+            });
+            
+            // Initialize map view toggle buttons
+            document.querySelectorAll('[data-view]').forEach(button => {
+                button.addEventListener('click', function() {
+                    document.querySelectorAll('[data-view]').forEach(b => b.classList.remove('active'));
+                    this.classList.add('active');
+                    setMapView(this.dataset.view);
+                });
+            });
+        });
+        
+        // Global variables
+        let map;
+        let heatmapLayer;
+        let markersLayer;
+        let threatData = [];
+        let updateInterval;
+        
+        // Fetch dashboard data
+        function fetchDashboardData() {
+            // In a real app, this would fetch from your API endpoint
+            // For now, we'll simulate with sample data
+            setTimeout(() => {
+                const data = generateSampleData();
+                updateDashboard(data);
+                document.getElementById('lastUpdated').textContent = new Date().toLocaleString();
+            }, 500);
+        }
+        
+        // Initialize the threat map
+        function initThreatMap() {
+            // Create the map
+            map = L.map('threatMap').setView([30, 10], 2);
+            
+            // Add the base layer
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+            }).addTo(map);
+            
+            // Initialize the heatmap layer
+            const heatmapConfig = {
+                "radius": 25,
+                "maxOpacity": 0.8,
+                "scaleRadius": false,
+                "useLocalExtrema": true,
+                "latField": 'lat',
+                "lngField": 'lng',
+                "valueField": 'intensity'
+            };
+            heatmapLayer = new HeatmapOverlay(heatmapConfig);
+            map.addLayer(heatmapLayer);
+            
+            // Initialize the markers layer
+            markersLayer = L.layerGroup();
+            map.addLayer(markersLayer);
+        }
+        
+        // Set the map view (heat, markers, or both)
+        function setMapView(view) {
+            if (view === 'heat') {
+                map.removeLayer(markersLayer);
+                map.addLayer(heatmapLayer);
+            } else if (view === 'markers') {
+                map.removeLayer(heatmapLayer);
+                map.addLayer(markersLayer);
+            } else if (view === 'both') {
+                map.addLayer(heatmapLayer);
+                map.addLayer(markersLayer);
+            }
+        }
+        
+        // Initialize the security posture gauge
+        function initSecurityPostureGauge() {
+            const options = {
+                chart: {
+                    height: 180,
+                    type: 'radialBar',
+                },
+                series: [67],
+                colors: ['#20E647'],
+                plotOptions: {
+                    radialBar: {
+                        startAngle: -135,
+                        endAngle: 135,
+                        hollow: {
+                            margin: 0,
+                            size: '70%',
+                        },
+                        dataLabels: {
+                            name: {
+                                fontSize: '16px',
+                                color: '#212121',
+                                offsetY: 80
+                            },
+                            value: {
+                                fontSize: '22px',
+                                color: '#212121',
+                                offsetY: -10,
+                                formatter: function(val) {
+                                    return val + '%';
+                                }
+                            }
+                        }
+                    }
+                },
+                fill: {
+                    type: 'gradient',
+                    gradient: {
+                        shade: 'dark',
+                        type: 'horizontal',
+                        shadeIntensity: 0.5,
+                        gradientToColors: ['#2a52be'],
+                        stops: [0, 100]
+                    }
+                },
+                stroke: {
+                    dashArray: 4
+                },
+                labels: ['Security Score'],
+            };
+            
+            const chart = new ApexCharts(document.querySelector('#securityPostureGauge'), options);
+            chart.render();
+        }
+        
+        // Initialize the attack vector radar chart
+        function initAttackVectorRadar() {
+            const options = {
+                chart: {
+                    height: 220,
+                    type: 'radar',
+                },
+                series: [{
+                    name: 'Attack Vectors',
+                    data: [80, 50, 30, 40, 60, 20],
+                }],
+                title: {
+                    text: ''
+                },
+                xaxis: {
+                    categories: ['Web', 'Email', 'Network', 'Social', 'Physical', 'Supply Chain']
+                },
+                yaxis: {
+                    show: false
+                },
+                colors: ['#2a52be'],
+                markers: {
+                    size: 4,
+                    colors: ['#fff'],
+                    strokeColor: '#2a52be',
+                    strokeWidth: 2,
+                },
+                tooltip: {
+                    y: {
+                        formatter: function(val) {
+                            return val;
+                        }
+                    }
+                }
+            };
+            
+            const chart = new ApexCharts(document.querySelector('#attackVectorRadar'), options);
+            chart.render();
+        }
+        
+        // Initialize the correlation network
+        function initCorrelationNetwork() {
+            // This would be a D3.js force-directed graph in a real implementation
+            // For now, we'll just add a placeholder
+            const container = document.getElementById('correlationNetwork');
+            container.innerHTML = '<div class="text-center py-4"><i class="bi bi-diagram-3" style="font-size: 3rem; color: #2a52be;"></i><p class="mt-2">Threat Correlation Network</p><p class="text-muted small">Visualizing connections between threat actors, campaigns, and IOCs</p></div>';
+        }
+        
+        // Initialize the MITRE ATT&CK matrix
+        function initMitreAttackMatrix() {
+            // In a real app, this would fetch the MITRE ATT&CK framework data
+            // For now, we'll just add some sample techniques
+            const container = document.getElementById('attackMatrix');
+            let html = '<div class="row g-2">';
+            
+            const techniques = [
+                { id: 'T1566', name: 'Phishing', tactic: 'initial-access', detected: true },
+                { id: 'T1189', name: 'Drive-by Compromise', tactic: 'initial-access', detected: false },
+                { id: 'T1078', name: 'Valid Accounts', tactic: 'initial-access', detected: true },
+                { id: 'T1059', name: 'Command and Scripting Interpreter', tactic: 'execution', detected: true },
+                { id: 'T1053', name: 'Scheduled Task/Job', tactic: 'execution', detected: true },
+                { id: 'T1569', name: 'System Services', tactic: 'execution', detected: false },
+                { id: 'T1136', name: 'Create Account', tactic: 'persistence', detected: true },
+                { id: 'T1547', name: 'Boot or Logon Autostart Execution', tactic: 'persistence', detected: true },
+                { id: 'T1574', name: 'Hijack Execution Flow', tactic: 'persistence', detected: false },
+                // Add more techniques as needed
+            ];
+            
+            techniques.forEach(technique => {
+                const bgColor = technique.detected ? 'bg-danger bg-opacity-25' : 'bg-light';
+                const border = technique.detected ? 'border-danger' : 'border-secondary';
+                const textColor = technique.detected ? 'text-danger' : 'text-secondary';
+                
+                html += `
+                <div class="col-md-4 col-lg-3 mitre-technique" data-tactic="${technique.tactic}">
+                    <div class="card ${bgColor} ${border} mb-2" style="border-width: 1px;">
+                        <div class="card-body p-2">
+                            <p class="mb-1 small fw-bold ${textColor}">${technique.id}</p>
+                            <p class="mb-0 small">${technique.name}</p>
+                        </div>
+                    </div>
+                </div>`;
+            });
+            
+            html += '</div>';
+            container.innerHTML = html;
+            
+            // Add event listener for the filter
+            document.getElementById('attackPhaseSelect').addEventListener('change', function() {
+                const tactic = this.value;
+                const techniques = document.querySelectorAll('.mitre-technique');
+                
+                techniques.forEach(tech => {
+                    if (tactic === 'all' || tech.dataset.tactic === tactic) {
+                        tech.style.display = 'block';
+                    } else {
+                        tech.style.display = 'none';
+                    }
+                });
+            });
+        }
+        
+        // Initialize the threat trends chart
+        function initThreatTrendsChart() {
+            const ctx = document.getElementById('threatTrendChart').getContext('2d');
+            
+            // Generate dates for the last 30 days
+            const labels = [];
+            for (let i = 29; i >= 0; i--) {
+                const date = new Date();
+                date.setDate(date.getDate() - i);
+                labels.push(date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }));
+            }
+            
+            // Generate random data
+            const criticalData = generateRandomData(30, 0, 5);
+            const highData = generateRandomData(30, 3, 10);
+            const mediumData = generateRandomData(30, 5, 15);
+            const lowData = generateRandomData(30, 8, 20);
+            
+            const chart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: 'Critical',
+                            data: criticalData,
+                            borderColor: '#dc3545',
+                            backgroundColor: 'rgba(220, 53, 69, 0.1)',
+                            borderWidth: 2,
+                            fill: true,
+                            tension: 0.4
+                        },
+                        {
+                            label: 'High',
+                            data: highData,
+                            borderColor: '#ffc107',
+                            backgroundColor: 'rgba(255, 193, 7, 0.1)',
+                            borderWidth: 2,
+                            fill: true,
+                            tension: 0.4
+                        },
+                        {
+                            label: 'Medium',
+                            data: mediumData,
+                            borderColor: '#2a52be',
+                            backgroundColor: 'rgba(42, 82, 190, 0.1)',
+                            borderWidth: 2,
+                            fill: true,
+                            tension: 0.4
+                        },
+                        {
+                            label: 'Low',
+                            data: lowData,
+                            borderColor: '#28a745',
+                            backgroundColor: 'rgba(40, 167, 69, 0.1)',
+                            borderWidth: 2,
+                            fill: true,
+                            tension: 0.4
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: {
+                            grid: {
+                                display: false
+                            },
+                            ticks: {
+                                maxTicksLimit: 7
+                            }
+                        },
+                        y: {
+                            beginAtZero: true,
+                            grid: {
+                                color: 'rgba(0, 0, 0, 0.05)'
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            position: 'top'
+                        }
+                    }
+                }
+            });
+        }
+        
+        // Start real-time updates
+        function startRealTimeUpdates() {
+            // Update every 30 seconds
+            updateInterval = setInterval(() => {
+                // Simulate receiving a new alert
+                if (Math.random() > 0.5) {
+                    addNewAlert();
+                }
+                
+                // Simulate threat map update
+                updateThreatMap();
+                
+            }, 30000);
+        }
+        
+        // Stop real-time updates
+        function stopRealTimeUpdates() {
+            clearInterval(updateInterval);
+        }
+        
+        // Add a new alert to the alerts list
+        function addNewAlert() {
+            const alertsList = document.getElementById('alertsList');
+            
+            // If placeholder is present, remove it
+            const placeholder = alertsList.querySelector('.text-center');
+            if (placeholder) {
+                alertsList.innerHTML = '';
+            }
+            
+            // Create alert types and templates
+            const alertTypes = [
+                { 
+                    severity: 'critical', 
+                    icon: 'exclamation-triangle-fill', 
+                    bg: 'bg-danger', 
+                    title: 'Critical Alert' 
+                },
+                { 
+                    severity: 'high', 
+                    icon: 'exclamation-circle-fill', 
+                    bg: 'bg-warning text-dark', 
+                    title: 'High Priority Alert' 
+                },
+                { 
+                    severity: 'medium', 
+                    icon: 'exclamation-circle', 
+                    bg: 'bg-primary', 
+                    title: 'Medium Priority Alert' 
+                },
+                { 
+                    severity: 'low', 
+                    icon: 'info-circle-fill', 
+                    bg: 'bg-success', 
+                    title: 'Low Priority Alert' 
+                }
+            ];
+            
+            // Select a random alert type, weighted toward less severe
+            const random = Math.random();
+            let alertType;
+            
+            if (random < 0.1) {
+                alertType = alertTypes[0]; // 10% critical
+            } else if (random < 0.3) {
+                alertType = alertTypes[1]; // 20% high
+            } else if (random < 0.6) {
+                alertType = alertTypes[2]; // 30% medium
+            } else {
+                alertType = alertTypes[3]; // 40% low
+            }
+            
+            // Sample alert messages
+            const alertMessages = {
+                critical: [
+                    'Possible data exfiltration detected',
+                    'Multiple failed admin login attempts',
+                    'Ransomware activity detected',
+                    'Critical vulnerability exploited'
+                ],
+                high: [
+                    'Suspicious process execution detected',
+                    'Unusual login location detected',
+                    'Potential privilege escalation',
+                    'Malware signature detected'
+                ],
+                medium: [
+                    'Unusual file access pattern',
+                    'New device connected to network',
+                    'DNS request to suspicious domain',
+                    'Abnormal user behavior detected'
+                ],
+                low: [
+                    'User account modified',
+                    'Configuration change detected',
+                    'Software update available',
+                    'New IoC added to database'
+                ]
+            };
+            
+            // Select a random message
+            const message = alertMessages[alertType.severity][Math.floor(Math.random() * alertMessages[alertType.severity].length)];
+            
+            // Create the alert
+            const alertElement = document.createElement('div');
+            alertElement.className = 'list-group-item p-3 real-time-alert';
+            alertElement.innerHTML = `
+                <div class="d-flex w-100 justify-content-between align-items-center">
+                    <h6 class="mb-1">
+                        <span class="badge ${alertType.bg} me-2">
+                            <i class="bi bi-${alertType.icon}"></i>
+                        </span>
+                        ${alertType.title}
+                    </h6>
+                    <small class="text-muted">${new Date().toLocaleTimeString()}</small>
+                </div>
+                <p class="mb-1">${message}</p>
+                <div class="d-flex justify-content-end">
+                    <button class="btn btn-sm btn-outline-secondary me-2">Investigate</button>
+                    <button class="btn btn-sm btn-outline-danger">Dismiss</button>
+                </div>
+            `;
+            
+            // Add to the list
+            alertsList.insertBefore(alertElement, alertsList.firstChild);
+            
+            // Update counter
+            const counter = document.getElementById('alertCounter');
+            counter.textContent = parseInt(counter.textContent) + 1;
+            
+            // Remove old alerts if there are too many
+            if (alertsList.children.length > 10) {
+                alertsList.removeChild(alertsList.lastChild);
+            }
+        }
+        
+        // Update the threat map with new data
+        function updateThreatMap() {
+            // Generate some random threat data
+            const data = {
+                max: 8,
+                data: []
+            };
+            
+            // Clear existing markers
+            markersLayer.clearLayers();
+            
+            // Generate 50 random points
+            for (let i = 0; i < 50; i++) {
+                const lat = Math.random() * 170 - 85; // -85 to 85
+                const lng = Math.random() * 360 - 180; // -180 to 180
+                const intensity = Math.random() * 8;
+                
+                data.data.push({
+                    lat: lat,
+                    lng: lng,
+                    intensity: intensity
+                });
+                
+                // Add markers for high-intensity threats
+                if (intensity > 5) {
+                    const marker = L.marker([lat, lng], {
+                        icon: L.divIcon({
+                            html: `<i class="bi bi-exclamation-triangle-fill" style="color: red; font-size: 20px;"></i>`,
+                            className: 'threat-node',
+                            iconSize: [20, 20]
+                        })
+                    });
+                    
+                    marker.bindPopup(`
+                        <div>
+                            <h6>High Intensity Threat</h6>
+                            <p>Location: ${lat.toFixed(2)}, ${lng.toFixed(2)}</p>
+                            <p>Intensity: ${intensity.toFixed(1)}/8</p>
+                            <p>Last Activity: ${new Date().toLocaleTimeString()}</p>
+                        </div>
+                    `);
+                    
+                    markersLayer.addLayer(marker);
+                }
+            }
+            
+            // Update the heatmap
+            heatmapLayer.setData(data);
+        }
+        
+        // Fill the IOC table with sample data
+        function populateIocTable(iocs) {
+            const tbody = document.getElementById('iocTableBody');
+            tbody.innerHTML = '';
+            
+            iocs.forEach(ioc => {
+                const tr = document.createElement('tr');
+                
+                // Determine badge color based on type
+                let badgeClass;
+                switch(ioc.type) {
+                    case 'IP':
+                        badgeClass = 'bg-danger';
+                        break;
+                    case 'Domain':
+                        badgeClass = 'bg-warning text-dark';
+                        break;
+                    case 'URL':
+                        badgeClass = 'bg-primary';
+                        break;
+                    case 'Hash':
+                        badgeClass = 'bg-success';
+                        break;
+                    default:
+                        badgeClass = 'bg-secondary';
+                }
+                
+                // Create confidence badge
+                let confidenceBadge;
+                if (ioc.confidence > 80) {
+                    confidenceBadge = 'bg-success';
+                } else if (ioc.confidence > 50) {
+                    confidenceBadge = 'bg-warning text-dark';
+                } else {
+                    confidenceBadge = 'bg-secondary';
+                }
+                
+                tr.innerHTML = `
+                    <td><span class="badge ${badgeClass}">${ioc.type}</span></td>
+                    <td>${ioc.value}</td>
+                    <td><span class="badge ${confidenceBadge}">${ioc.confidence}%</span></td>
+                    <td>${ioc.firstSeen}</td>
+                `;
+                
+                tbody.appendChild(tr);
+            });
+        }
+        
+        // Generate sample data
+        function generateSampleData() {
+            return {
+                stats: {
+                    critical: Math.floor(Math.random() * 3) + 1,
+                    high: Math.floor(Math.random() * 10) + 5,
+                    medium: Math.floor(Math.random() * 20) + 15,
+                    low: Math.floor(Math.random() * 30) + 20
+                },
+                iocs: generateSampleIocs(),
+                threatActivityTimeline: generateSampleTimeline()
+            };
+        }
+        
+        // Generate sample IOCs
+        function generateSampleIocs() {
+            const iocs = [
+                { type: 'IP', value: '185.143.223.100', confidence: 95, firstSeen: '2023-02-15' },
+                { type: 'Domain', value: 'malicious-domain.com', confidence: 87, firstSeen: '2023-02-18' },
+                { type: 'URL', value: 'http://phishing-attempt.net/login.php', confidence: 92, firstSeen: '2023-02-20' },
+                { type: 'Hash', value: '5f4dcc3b5aa765d61d8327deb882cf99', confidence: 75, firstSeen: '2023-02-22' },
+                { type: 'IP', value: '103.26.55.127', confidence: 68, firstSeen: '2023-02-25' },
+                { type: 'Domain', value: 'suspicious-cdn.biz', confidence: 65, firstSeen: '2023-02-28' },
+                { type: 'URL', value: 'https://fake-banking.info/secure/', confidence: 90, firstSeen: '2023-03-01' },
+                { type: 'Hash', value: '098f6bcd4621d373cade4e832627b4f6', confidence: 82, firstSeen: '2023-03-03' }
+            ];
+            
+            return iocs;
+        }
+        
+        // Generate sample timeline
+        function generateSampleTimeline() {
+            const events = [
+                { timestamp: '2023-03-06 08:32:15', event: 'New phishing campaign detected targeting finance department', level: 'high' },
+                { timestamp: '2023-03-05 14:17:42', event: 'Malware signature updated in detection systems', level: 'info' },
+                { timestamp: '2023-03-04 22:05:33', event: 'Suspicious login attempts blocked from 5 IP addresses', level: 'medium' },
+                { timestamp: '2023-03-03 11:45:21', event: 'STIX/TAXII feed imported with 128 new indicators', level: 'info' },
+                { timestamp: '2023-03-02 17:32:08', event: 'Critical vulnerability patched on production servers', level: 'high' },
+                { timestamp: '2023-03-01 09:12:55', event: 'Potential data exfiltration attempt detected and blocked', level: 'critical' }
+            ];
+            
+            return events;
+        }
+        
+        // Update the dashboard with the provided data
+        function updateDashboard(data) {
+            // Update stats
+            document.getElementById('criticalThreats').textContent = data.stats.critical;
+            document.getElementById('highThreats').textContent = data.stats.high;
+            document.getElementById('mediumThreats').textContent = data.stats.medium;
+            document.getElementById('lowThreats').textContent = data.stats.low;
+            
+            // Update detection coverage and response readiness
+            document.getElementById('detectionCoverage').textContent = Math.floor(Math.random() * 20 + 70) + '%';
+            document.getElementById('responseReadiness').textContent = Math.floor(Math.random() * 20 + 65) + '%';
+            
+            // Update threat map
+            updateThreatMap();
+            
+            // Update IOC table
+            populateIocTable(data.iocs);
+            
+            // Update threat timeline
+            updateThreatTimeline(data.threatActivityTimeline);
+        }
+        
+        // Update the threat timeline
+        function updateThreatTimeline(events) {
+            const container = document.getElementById('threatTimeline');
+            container.innerHTML = '';
+            
+            events.forEach(event => {
+                // Determine badge color based on level
+                let badgeClass;
+                switch(event.level) {
+                    case 'critical':
+                        badgeClass = 'bg-danger';
+                        break;
+                    case 'high':
+                        badgeClass = 'bg-warning text-dark';
+                        break;
+                    case 'medium':
+                        badgeClass = 'bg-primary';
+                        break;
+                    case 'info':
+                        badgeClass = 'bg-info text-dark';
+                        break;
+                    default:
+                        badgeClass = 'bg-secondary';
+                }
+                
+                const timelineItem = document.createElement('div');
+                timelineItem.className = 'timeline-item';
+                timelineItem.innerHTML = `
+                    <div class="d-flex justify-content-between">
+                        <span class="badge ${badgeClass}">${event.level}</span>
+                        <small class="text-muted">${event.timestamp}</small>
+                    </div>
+                    <p class="mb-0 mt-1">${event.event}</p>
+                `;
+                
+                container.appendChild(timelineItem);
+            });
+        }
+        
+        // Helper function to generate random data for charts
+        function generateRandomData(count, min, max) {
+            const data = [];
+            for (let i = 0; i < count; i++) {
+                data.push(Math.floor(Math.random() * (max - min + 1)) + min);
+            }
+            return data;
+        }
+    </script>
+</body>
+</html> 
