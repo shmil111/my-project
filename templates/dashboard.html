@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Documentation Manager</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.7.0/dist/chart.min.js"></script>
+    <script src="https://unpkg.com/@popperjs/core@2"></script>
+    <script src="https://unpkg.com/tippy.js@6"></script>
+</head>
+
+<body class="bg-gray-100">
+    <nav class="bg-white shadow-lg">
+        <div class="max-w-7xl mx-auto px-4">
+            <div class="flex justify-between h-16">
+                <div class="flex">
+                    <div class="flex-shrink-0 flex items-center">
+                        <h1 class="text-xl font-bold">Documentation Manager</h1>
+                    </div>
+                    <div class="hidden sm:ml-6 sm:flex sm:space-x-8">
+                        <a href="#"
+                            class="border-indigo-500 text-gray-900 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
+                            Dashboard
+                        </a>
+                        <a href="#"
+                            class="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
+                            Documents
+                        </a>
+                        <a href="#"
+                            class="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
+                            TODOs
+                        </a>
+                        <a href="#"
+                            class="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
+                            Reports
+                        </a>
+                    </div>
+                </div>
+                <div class="flex items-center">
+                    <button id="scanButton"
+                        class="bg-indigo-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                        Scan Documents
+                    </button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <main class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+        <!-- Stats -->
+        <div class="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
+            <div class="bg-white overflow-hidden shadow rounded-lg">
+                <div class="px-4 py-5 sm:p-6">
+                    <dt class="text-sm font-medium text-gray-500 truncate">Total Documents</dt>
+                    <dd class="mt-1 text-3xl font-semibold text-gray-900" id="totalDocs">-</dd>
+                </div>
+            </div>
+            <div class="bg-white overflow-hidden shadow rounded-lg">
+                <div class="px-4 py-5 sm:p-6">
+                    <dt class="text-sm font-medium text-gray-500 truncate">Documents with TODOs</dt>
+                    <dd class="mt-1 text-3xl font-semibold text-gray-900" id="docsWithTodos">-</dd>
+                </div>
+            </div>
+            <div class="bg-white overflow-hidden shadow rounded-lg">
+                <div class="px-4 py-5 sm:p-6">
+                    <dt class="text-sm font-medium text-gray-500 truncate">Needs Update</dt>
+                    <dd class="mt-1 text-3xl font-semibold text-gray-900" id="needsUpdate">-</dd>
+                </div>
+            </div>
+            <div class="bg-white overflow-hidden shadow rounded-lg">
+                <div class="px-4 py-5 sm:p-6">
+                    <dt class="text-sm font-medium text-gray-500 truncate">Average Word Count</dt>
+                    <dd class="mt-1 text-3xl font-semibold text-gray-900" id="avgWordCount">-</dd>
+                </div>
+            </div>
+        </div>
+
+        <!-- Charts -->
+        <div class="mt-8 grid grid-cols-1 gap-5 sm:grid-cols-2">
+            <div class="bg-white overflow-hidden shadow rounded-lg">
+                <div class="px-4 py-5 sm:p-6">
+                    <h3 class="text-lg font-medium text-gray-900">Document Categories</h3>
+                    <div class="mt-4">
+                        <canvas id="categoryChart"></canvas>
+                    </div>
+                </div>
+            </div>
+            <div class="bg-white overflow-hidden shadow rounded-lg">
+                <div class="px-4 py-5 sm:p-6">
+                    <h3 class="text-lg font-medium text-gray-900">Document Status</h3>
+                    <div class="mt-4">
+                        <canvas id="statusChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Recent Updates -->
+        <div class="mt-8">
+            <div class="bg-white shadow rounded-lg">
+                <div class="px-4 py-5 sm:p-6">
+                    <h3 class="text-lg font-medium text-gray-900">Recent Updates</h3>
+                    <div class="mt-4">
+                        <div class="flow-root">
+                            <ul id="recentUpdates" class="-my-5 divide-y divide-gray-200">
+                                <!-- Updates will be inserted here -->
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        // Fetch and update stats
+        async function updateStats() {
+            const response = await fetch('/stats');
+            const stats = await response.json();
+
+            document.getElementById('totalDocs').textContent = stats.total_docs;
+            document.getElementById('docsWithTodos').textContent = stats.docs_with_todos;
+            document.getElementById('needsUpdate').textContent = stats.needs_update;
+            document.getElementById('avgWordCount').textContent = Math.round(stats.avg_word_count);
+        }
+
+        // Initialize charts
+        async function initCharts() {
+            const categoryResponse = await fetch('/categories');
+            const categories = await categoryResponse.json();
+
+            new Chart(document.getElementById('categoryChart'), {
+                type: 'doughnut',
+                data: {
+                    labels: categories.map(c => c.name),
+                    datasets: [{
+                        data: categories.map(c => c.doc_count),
+                        backgroundColor: [
+                            '#3B82F6',
+                            '#10B981',
+                            '#F59E0B',
+                            '#EF4444',
+                            '#8B5CF6'
+                        ]
+                    }]
+                }
+            });
+        }
+
+        // Handle document scanning
+        document.getElementById('scanButton').addEventListener('click', async () => {
+            try {
+                await fetch('/scan');
+                alert('Document scan initiated');
+                setTimeout(updateStats, 2000);
+            } catch (error) {
+                alert('Error scanning documents');
+            }
+        });
+
+        // Initialize dashboard
+        updateStats();
+        initCharts();
+    </script>
+</body>
+
+</html>

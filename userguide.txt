@@ -1,0 +1,25 @@
+EVEEXE USER GUIDE
+
+BUILDING EVEEXE
+Install Nodejs
+Install dependencies
+Build project
+Test functionality
+Create executable
+
+RUNNING EVE
+Double click Eveexe
+Wait for initialization
+Access web interface
+Configure settings
+Start using
+
+TROUBLESHOOTING
+Run verifyeveexe to check if all components are properly installed
+Review any error messages in the command prompt window
+Check that port 3000 is not being used by another application
+Ensure your antivirus is not blocking Eveexe
+
+DISTRIBUTING EVE
+Copy the entire dist directory
+The recipient can run Eveexe directly without needing to install Nodejs 
